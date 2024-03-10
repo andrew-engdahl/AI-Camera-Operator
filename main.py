@@ -4,6 +4,17 @@ import time
 import numpy as np
 import os
 import math
+import statistics
+import mido
+
+# Create a MIDI Ouput
+
+midiPort = mido.open_output(mido.get_output_names()[1])
+
+# from mido.sockets import PortServer, connect
+# for message in PortServer('localhost', 5004):
+#     print(message)
+# session = connect('localhost', 5004)
 
 # Mediapipe Config
 # BaseOptions = mp.tasks.BaseOptions
@@ -15,10 +26,9 @@ import math
 #     running_mode=VisionRunningMode.LIVE_STREAM,
 #     min_tracking_confidence=0.8)
 
-torsoPoints = {'x':{}, 'y': {}}
+torsoPoints = {'x': [], 'y': []}
 
-leftMostPoint = .5
-rightMostPoint = .5
+txt = ""
 
 # Colors
 blue = (255,0,0)
@@ -31,11 +41,15 @@ mpDraw = mp.solutions.drawing_utils
 mpPose = mp.solutions.pose
 pose = mpPose.Pose()
 
+# Set Capture Size
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-pTime = 0
+# Set Options
+xDeadZone = .05
+yDeadZone = .33
+smoothing = 20
 
 while True:
     success, img = cap.read()
@@ -43,16 +57,11 @@ while True:
     results = pose.process(imgRGB)
 
     height, width = img.shape[:2]
-    leftBoundPercent = 0.2
-    rightBoundPercent = 0.8
-    topBoundPercent = 0.2
-    bottomBoundPercent = 0.8
-    leftBound = int(width * leftBoundPercent)
-    rightBound = int(width * rightBoundPercent)
-    topBound = int(height * topBoundPercent)
-    bottomBound = int(height * bottomBoundPercent)
 
-    str = ''
+    leftBound = int(width * (0.5 - xDeadZone))
+    rightBound = int(width * (0.5 + xDeadZone))
+    topBound = int(height * (0.5 - yDeadZone))
+    bottomBound = int(height * (0.5 - yDeadZone))
 
     if results.pose_landmarks:
         mpDraw.draw_landmarks(img,results.pose_landmarks, mpPose.POSE_CONNECTIONS)
@@ -63,50 +72,62 @@ while True:
                 h, w, c = img.shape
                 cx, cy = int(lm.x * w), int(lm.y * h)
                 x, y = float("{:.2f}".format(lm.x)), float("{:.2f}".format(lm.y))
-
-                torsoPoints['x'][id] = x
-                torsoPoints['y'][id] = y
                 cv2.circle(img, (cx, cy), 5, red, cv2.FILLED)
 
+                if len(torsoPoints['x']) > smoothing:
+                    del torsoPoints['x'][0]
+                    del torsoPoints['y'][0]
+
+                torsoPoints['x'].append(x)
+                torsoPoints['y'].append(y)
+
         # Get Body Alignment
-        s1x = (torsoPoints['x'][23] + torsoPoints['x'][24]) / 2
-        s1y = (torsoPoints['y'][23] + torsoPoints['y'][24]) / 2
-        s2x = (torsoPoints['x'][11] + torsoPoints['x'][12]) / 2
-        s2y = (torsoPoints['y'][11] + torsoPoints['y'][12]) / 2
+        #print(torsoPoints)
+        s1x = statistics.mean([results.pose_landmarks.landmark[23].x, results.pose_landmarks.landmark[24].x])
+        s1y = statistics.mean([results.pose_landmarks.landmark[23].y, results.pose_landmarks.landmark[24].y])
+        s2x = statistics.mean([results.pose_landmarks.landmark[11].x, results.pose_landmarks.landmark[12].x])
+        s2y = statistics.mean([results.pose_landmarks.landmark[11].y, results.pose_landmarks.landmark[12].y])
 
-        # Get Slope of body
-        if (s2x - s1x) != 0:
-            m = (s2y - s1y) / (s2x - s1x)
-        else: # Temp workaround for 0 diff in Xs
-            m = (s2y - s1y) / 0.00000001
+        # Get Torso Center
+        torsoCenter = (int(statistics.mean(torsoPoints['x']) * width), int((statistics.mean(torsoPoints['y'])) * height))
+        cv2.circle(img, torsoCenter, 5, green, cv2.FILLED)
 
-        # Get Y-Intercept
-        b = s1y - m * s1x
+        # # Get Slope of body
+        # if (s2x - s1x) != 0:
+        #     m = (s2y - s1y) / (s2x - s1x)
+        # else: # Temp workaround for 0 diff in Xs
+        #     m = (s2y - s1y) / 0.00000001
 
-        # Set Torso to Head Ratio and Calculate
-        f = 1/5
-        torsoLength = math.sqrt(math.pow(abs(s2x-s1x),2)+math.pow(abs(s2y-s1y),2))
-        sx = s2x + (m/abs(m))*(torsoLength*f*math.cos(math.atan(m)))
-        sy = m*sx+b
+        # # Get Y-Intercept
+        # b = s1y - m * s1x
 
-        print((sx * width, sy * height))
-        #cv2.circle(img, (sx * width, (1-sy) * height), 5, green, cv2.FILLED)
+        # # Set Torso to Head Ratio and Calculate
+        # f = 2/3
+        # torsoLength = math.sqrt(math.pow(abs(s2x-s1x),2)+math.pow(abs(s2y-s1y),2))
+        # sx = s2x + (m/abs(m))*(torsoLength*f*math.cos(math.atan(m)))
+        # sy = m*sx+b
+        # headPosition = (int(sx * width), int((1-sy) * height))
 
-        try:
-            leftMostPoint = min(torsoPoints['x'].values())
-            rightMostPoint = max(torsoPoints['x'].values())
-        except:
-            print("torsoPoints not defined")
+        # print(headPosition)
+        # cv2.circle(img, headPosition, 5, magenta, cv2.FILLED)
 
-        if leftMostPoint <= leftBoundPercent and rightMostPoint >= rightBoundPercent:
-            str = "zoom-out"
-        else:
-            if leftMostPoint <= leftBoundPercent:
-                str = "pan-left"
-            if rightMostPoint >= rightBoundPercent:
-                str = "pan-right"
+        if torsoCenter[0] > leftBound and torsoCenter[0] < rightBound:
+            txt = ""
+            midiPort.send(mido.Message('note_off', channel=0, note=60))
+            midiPort.send(mido.Message('note_off', channel=0, note=61))
+        elif torsoCenter[0] <= leftBound:
+            panStrength = (leftBound - torsoCenter[0]) / leftBound
+            txt = "pan-left" + str(panStrength)
+            # Send a MIDI message
+            midiPort.send(mido.Message('note_off', channel=0, note=61))
+            midiPort.send(mido.Message('note_on', channel=0, note=60, velocity=127))
+        elif torsoCenter[0] >= rightBound:
+            panStrength = (torsoCenter[0] - rightBound) / leftBound
+            midiPort.send(mido.Message('note_off', channel=0, note=60))
+            midiPort.send(mido.Message('note_on', channel=0, note=61, velocity=127))
+            txt = "pan-right" + str(panStrength)
                 
-    cv2.putText(img, str, (40,40), cv2.FONT_HERSHEY_SIMPLEX, 1, white, 1)
+    cv2.putText(img, txt, (40,40), cv2.FONT_HERSHEY_SIMPLEX, 1, white, 1)
 
     # Draw bounding lines
     cv2.line(img, (leftBound,0), (leftBound,height), magenta, 1)
@@ -116,3 +137,6 @@ while True:
 
     cv2.imshow("Visual Results", img)
     cv2.waitKey(1)
+
+# Close the session
+midiPort.close()
