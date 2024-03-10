@@ -68,7 +68,30 @@ while True:
                 torsoPoints['y'][id] = y
                 cv2.circle(img, (cx, cy), 5, red, cv2.FILLED)
 
-        print(torsoPoints)
+        # Get Body Alignment
+        s1x = (torsoPoints['x'][23] + torsoPoints['x'][24]) / 2
+        s1y = (torsoPoints['y'][23] + torsoPoints['y'][24]) / 2
+        s2x = (torsoPoints['x'][11] + torsoPoints['x'][12]) / 2
+        s2y = (torsoPoints['y'][11] + torsoPoints['y'][12]) / 2
+
+        # Get Slope of body
+        if (s2x - s1x) != 0:
+            m = (s2y - s1y) / (s2x - s1x)
+        else: # Temp workaround for 0 diff in Xs
+            m = (s2y - s1y) / 0.00000001
+
+        # Get Y-Intercept
+        b = s1y - m * s1x
+
+        # Set Torso to Head Ratio and Calculate
+        f = 1/5
+        torsoLength = math.sqrt(math.pow(abs(s2x-s1x),2)+math.pow(abs(s2y-s1y),2))
+        sx = s2x + (m/abs(m))*(torsoLength*f*math.cos(math.atan(m)))
+        sy = m*sx+b
+
+        print((sx * width, sy * height))
+        #cv2.circle(img, (sx * width, (1-sy) * height), 5, green, cv2.FILLED)
+
         try:
             leftMostPoint = min(torsoPoints['x'].values())
             rightMostPoint = max(torsoPoints['x'].values())
@@ -82,28 +105,6 @@ while True:
                 str = "pan-left"
             if rightMostPoint >= rightBoundPercent:
                 str = "pan-right"
-
-    # Get Body Alignment
-    s1x = (torsoPoints['x'][23] + torsoPoints['x'][24]) / 2
-    s1y = (torsoPoints['y'][23] + torsoPoints['y'][24]) / 2
-    s2x = (torsoPoints['x'][11] + torsoPoints['x'][12]) / 2
-    s2y = (torsoPoints['y'][11] + torsoPoints['y'][12]) / 2
-
-    # Get Slope of body
-    m = (s2y - s1y) / (s2x - s1x)
-
-    # Get Y-Intercept
-    b = s1y - m * s1x
-
-    # Set Torso to Head Ratio and Calculate
-    f = 3/4
-    torsoLength = math.sqrt(math.pow(abs(s2x-s1x),2)+math.pow(abs(s2y-s1y),2))
-    sx = s2x + (m/abs(m))(torsoLength*f*math.cos(math.atan(m)))
-    sy = m(sx)+b
-
-
-    cv2.circle(img, (sx, sy), 5, red, cv2.FILLED)
-
                 
     cv2.putText(img, str, (40,40), cv2.FONT_HERSHEY_SIMPLEX, 1, white, 1)
 
