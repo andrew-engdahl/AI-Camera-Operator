@@ -9,7 +9,11 @@ import mido
 
 # Create a MIDI Ouput
 
-midiPort = mido.open_output(mido.get_output_names()[1])
+try:
+    midiPort = mido.open_output(mido.get_output_names()[1])
+except:
+    print("No MIDI outputs detected")
+    noMidi = True
 
 # from mido.sockets import PortServer, connect
 # for message in PortServer('localhost', 5004):
@@ -113,18 +117,21 @@ while True:
 
         if torsoCenter[0] > leftBound and torsoCenter[0] < rightBound:
             txt = ""
-            midiPort.send(mido.Message('note_off', channel=0, note=60))
-            midiPort.send(mido.Message('note_off', channel=0, note=61))
+            if not noMidi:
+                midiPort.send(mido.Message('note_off', channel=0, note=60))
+                midiPort.send(mido.Message('note_off', channel=0, note=61))
         elif torsoCenter[0] <= leftBound:
             panStrength = (leftBound - torsoCenter[0]) / leftBound
             txt = "pan-left" + str(panStrength)
             # Send a MIDI message
-            midiPort.send(mido.Message('note_off', channel=0, note=61))
-            midiPort.send(mido.Message('note_on', channel=0, note=60, velocity=127))
+            if not noMidi:
+                midiPort.send(mido.Message('note_off', channel=0, note=61))
+                midiPort.send(mido.Message('note_on', channel=0, note=60, velocity=127))
         elif torsoCenter[0] >= rightBound:
             panStrength = (torsoCenter[0] - rightBound) / leftBound
-            midiPort.send(mido.Message('note_off', channel=0, note=60))
-            midiPort.send(mido.Message('note_on', channel=0, note=61, velocity=127))
+            if not noMidi:
+                midiPort.send(mido.Message('note_off', channel=0, note=60))
+                midiPort.send(mido.Message('note_on', channel=0, note=61, velocity=127))
             txt = "pan-right" + str(panStrength)
                 
     cv2.putText(img, txt, (40,40), cv2.FONT_HERSHEY_SIMPLEX, 1, white, 1)
