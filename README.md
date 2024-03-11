@@ -1,10 +1,10 @@
 ## Prerequisites 
 
-# Install Mediapip
+# Install Mediapipe
 ```
 pip install -q mediapipe
 ```
-#Install Mido with the default backend
+# Install Mido with the default backend
 ```
 pip install mido[ports-rtmidi]
 ```
