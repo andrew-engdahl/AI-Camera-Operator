@@ -1,7 +1,12 @@
 ## Prerequisites 
 
+# Install Mediapip
 ```
 pip install -q mediapipe
+```
+#Install Mido with the default backend
+```
+pip install mido[ports-rtmidi]
 ```
 Then download an off-the-shelf model bundle. Check out the MediaPipe documentation for more information about this model bundle.
 
